@@ -1,0 +1,27 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy staging
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/chinident/backend
+            git fetch --all
+            git reset --hard origin main
+
+            cd ~/chinident
+            docker compose down backend
+            docker compose build --no-cache backend
+            docker compose up -d backend
+            docker image prune -f
