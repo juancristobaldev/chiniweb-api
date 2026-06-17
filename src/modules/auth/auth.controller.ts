@@ -73,8 +73,8 @@ export class AuthController {
   @Post("logout")
   async logout(@CurrentUser() user: any, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(user.id);
-    res.clearCookie("access_token", { path: "/" });
-    res.clearCookie("refresh_token", { path: "/" });
+    res.clearCookie("access_token", COOKIE_OPTIONS);
+    res.clearCookie("refresh_token", COOKIE_OPTIONS);
     return { message: "Sesión cerrada exitosamente" };
   }
 
