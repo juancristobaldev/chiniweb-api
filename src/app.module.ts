@@ -16,6 +16,7 @@ import { TreatmentsModule } from "./modules/treatments/treatments.module";
 import { BudgetsModule } from "./modules/budgets/budgets.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { AttachmentsModule } from "./modules/attachments/attachments.module";
+import { AdminSetupModule } from "./modules/admin/admin-setup.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { TenantGuard } from "./common/guards/tenant.guard";
@@ -44,6 +45,7 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     BudgetsModule,
     PaymentsModule,
     AttachmentsModule,
+    AdminSetupModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
