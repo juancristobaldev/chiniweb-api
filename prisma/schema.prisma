@@ -1,0 +1,647 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OWNER
+  DENTIST
+  PATIENT
+}
+
+enum AppointmentStatus {
+  RESERVADA
+  CONFIRMADA
+  EN_ATENCION
+  FINALIZADA
+  CANCELADA
+  NO_ASISTIO
+}
+
+enum BudgetStatus {
+  BORRADOR
+  ENVIADO
+  ACEPTADO
+  RECHAZADO
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+  MIXTO
+}
+
+enum PaymentStatus {
+  PAGADO
+  PENDIENTE
+  PARCIAL
+}
+
+enum TreatmentStatus {
+  PLANIFICADO
+  EN_PROGRESO
+  COMPLETADO
+  CANCELADO
+}
+
+enum ToothSurface {
+  MESIAL
+  DISTAL
+  VESTIBULAR
+  LINGUAL
+  OCLUSAL
+}
+
+enum DentalProcedure {
+  CARIES
+  RESTAURACION
+  ENDODONCIA
+  EXTRACCION
+  CORONA
+  IMPLANTE
+  SELLANTE
+  PROTESIS
+  PUENTE
+}
+
+enum ProcedureStatus {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADO
+}
+
+enum ClinicalRecordType {
+  ANAMNESIS
+  DIAGNOSIS
+  EVOLUTION
+  PROCEDURE
+  OBSERVATION
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  SMS
+}
+
+enum PlanType {
+  TRIAL
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum FileEntityType {
+  PATIENT
+  TREATMENT
+  EVOLUTION
+  ODONTOGRAM
+  BUDGET
+}
+
+enum FileType {
+  IMAGE
+  XRAY
+  DOCUMENT
+  PRESCRIPTION
+}
+
+model Tenant {
+  id            String     @id @default(uuid())
+  name          String
+  rut           String     @unique
+  businessName  String?
+  email         String
+  phone         String?
+  address       String?
+  logoUrl       String?
+  themeColor    String     @default("blue")
+  isActive      Boolean    @default(true)
+  planType      PlanType   @default(TRIAL)
+  ownerId       String?    @unique
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  owner         User?            @relation("TenantOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  locales       Locale[]
+  dentists      Dentist[]
+  users         User[]           @relation("UserTenant")
+  patients      Patient[]
+  appointments  Appointment[]
+  budgets       Budget[]
+  payments      Payment[]
+  subscriptions Subscription[]
+  auditLogs     AuditLog[]
+
+  @@map("tenants")
+}
+
+model Locale {
+  id            String    @id @default(uuid())
+  tenantId      String
+  name          String
+  address       String?
+  phone         String?
+  email         String?
+  timezone      String    @default("America/Santiago")
+  openingHours  Json      @default("{}")
+  isActive      Boolean   @default(true)
+  color         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  boxes         Box[]
+  specialties   Specialty[]
+  dentistLocales DentistLocale[]
+  patientLocales PatientLocale[]
+  appointments  Appointment[]
+
+  @@map("locales")
+}
+
+model Box {
+  id        String   @id @default(uuid())
+  localeId  String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locale    Locale        @relation(fields: [localeId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@map("boxes")
+}
+
+model Specialty {
+  id        String   @id @default(uuid())
+  localeId  String
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  locale    Locale    @relation(fields: [localeId], references: [id], onDelete: Cascade)
+
+  @@map("specialties")
+}
+
+model DentistLocale {
+  dentistId String
+  localeId  String
+
+  dentist Dentist @relation(fields: [dentistId], references: [id], onDelete: Cascade)
+  locale  Locale  @relation(fields: [localeId], references: [id], onDelete: Cascade)
+
+  @@id([dentistId, localeId])
+  @@map("dentist_locales")
+}
+
+model User {
+  id               String     @id @default(uuid())
+  email            String     @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  role             UserRole
+  tenantId         String?
+  avatarUrl        String?
+  isActive         Boolean    @default(true)
+  refreshTokenHash String?
+  lastLogin        DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  tenant           Tenant?         @relation("UserTenant", fields: [tenantId], references: [id], onDelete: SetNull)
+  ownedTenant      Tenant?         @relation("TenantOwner")
+  dentistProfile   Dentist?
+  patientProfile   Patient?
+  appointments     Appointment[]   @relation("DentistAppointments")
+  clinicalRecords  ClinicalRecord[]
+  odontogramEdits  Odontogram[]
+  odontogramRecords OdontogramRecord[]
+  treatmentPlans   TreatmentPlan[]
+  budgets          Budget[]        @relation("DentistBudgets")
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Dentist {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  tenantId       String
+  specialty      String?
+  licenseNumber  String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locales        DentistLocale[]
+  patients       Patient[]
+
+  @@map("dentists")
+}
+
+model Patient {
+  id                 String   @id @default(uuid())
+  userId             String?  @unique
+  tenantId           String
+  firstName          String?
+  lastName           String?
+  rut                String?
+  dob                DateTime?
+  sex                String?
+  address            String?
+  emergencyContact   String?
+  emergencyPhone     String?
+  bloodType          String?
+  occupation         String?
+  referredBy         String?
+  dentistId          String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user               User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dentist            Dentist?          @relation(fields: [dentistId], references: [id], onDelete: SetNull)
+  locales            PatientLocale[]
+  medicalInfo        MedicalInfo?
+  appointments       Appointment[]
+  clinicalRecords    ClinicalRecord[]
+  odontograms        Odontogram[]
+  treatmentPlans     TreatmentPlan[]
+  budgets            Budget[]
+  payments           Payment[]
+  attachments        Attachment[]
+
+  @@map("patients")
+}
+
+model PatientLocale {
+  patientId String
+  localeId  String
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  locale  Locale  @relation(fields: [localeId], references: [id], onDelete: Cascade)
+
+  @@id([patientId, localeId])
+  @@map("patient_locales")
+}
+
+model MedicalInfo {
+  id            String   @id @default(uuid())
+  patientId     String   @unique
+  diseases      Json     @default("[]")
+  allergies     Json     @default("[]")
+  medications   Json     @default("[]")
+  surgeries     Json     @default("[]")
+  clinicalRisks Json     @default("[]")
+  familyHistory Json     @default("[]")
+  habits        Json     @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("medical_info")
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  tenantId        String
+  patientId       String
+  dentistId       String
+  localeId        String
+  boxId           String?
+  treatmentPlanId String?
+  startTime       DateTime
+  endTime         DateTime
+  status          AppointmentStatus @default(RESERVADA)
+  type            String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient         Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dentist         User              @relation("DentistAppointments", fields: [dentistId], references: [id], onDelete: Cascade)
+  locale          Locale            @relation(fields: [localeId], references: [id], onDelete: Cascade)
+  box             Box?              @relation(fields: [boxId], references: [id], onDelete: SetNull)
+  treatmentPlan   TreatmentPlan?    @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  clinicalRecords ClinicalRecord[]
+
+  @@index([tenantId, startTime])
+  @@index([dentistId, startTime])
+  @@index([patientId])
+  @@map("appointments")
+}
+
+model ClinicalRecord {
+  id             String            @id @default(uuid())
+  patientId      String
+  dentistId      String
+  appointmentId  String?
+  type           ClinicalRecordType
+  content        Json
+  isDeleted      Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  patient        Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dentist        User              @relation(fields: [dentistId], references: [id], onDelete: Cascade)
+  appointment    Appointment?      @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  attachments    Attachment[]
+
+  @@index([patientId])
+  @@index([dentistId])
+  @@map("clinical_records")
+}
+
+model Odontogram {
+  id             String   @id @default(uuid())
+  patientId      String   @unique
+  lastUpdatedBy  String
+  dentition      String   @default("permanent")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  patient        Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dentist        User              @relation(fields: [lastUpdatedBy], references: [id])
+  items          OdontogramItem[]
+  records        OdontogramRecord[]
+
+  @@map("odontograms")
+}
+
+model OdontogramRecord {
+  id            String   @id @default(uuid())
+  odontogramId  String
+  creatorId     String
+  creatorName   String
+  toothNumber   Int
+  faces         Json     @default("[]")
+  catalogId     String
+  status        String
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  odontogram    Odontogram @relation(fields: [odontogramId], references: [id], onDelete: Cascade)
+  creator       User       @relation(fields: [creatorId], references: [id])
+
+  @@index([odontogramId, toothNumber])
+  @@map("odontogram_records")
+}
+
+model OdontogramItem {
+  id            String          @id @default(uuid())
+  odontogramId  String
+  toothCode     Int
+  surface       ToothSurface
+  procedure     DentalProcedure
+  status        ProcedureStatus @default(PENDIENTE)
+  color         String?
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  odontogram    Odontogram      @relation(fields: [odontogramId], references: [id], onDelete: Cascade)
+
+  @@index([odontogramId, toothCode])
+  @@map("odontogram_items")
+}
+
+model TreatmentPlan {
+  id          String          @id @default(uuid())
+  patientId   String
+  dentistId   String
+  name        String
+  description String?
+  status      TreatmentStatus @default(PLANIFICADO)
+  startDate   DateTime?
+  endDate     DateTime?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  patient     Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dentist     User              @relation(fields: [dentistId], references: [id], onDelete: Cascade)
+  stages      TreatmentStage[]
+  appointments Appointment[]
+  attachments Attachment[]
+
+  @@index([patientId])
+  @@map("treatment_plans")
+}
+
+model TreatmentStage {
+  id          String          @id @default(uuid())
+  planId      String
+  step        Int
+  name        String
+  description String?
+  toothCode   Int?
+  status      TreatmentStatus @default(PLANIFICADO)
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  plan        TreatmentPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("treatment_stages")
+}
+
+model Budget {
+  id          String       @id @default(uuid())
+  tenantId    String
+  patientId   String
+  dentistId   String
+  localeId    String?
+  status      BudgetStatus @default(BORRADOR)
+  subtotal    Decimal      @default(0)
+  discount    Decimal      @default(0)
+  total       Decimal      @default(0)
+  validUntil  DateTime?
+  notes       String?
+  acceptedAt  DateTime?
+  rejectedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  dentist     User         @relation("DentistBudgets", fields: [dentistId], references: [id], onDelete: Cascade)
+  items       BudgetItem[]
+  payments    Payment[]
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("budgets")
+}
+
+model BudgetItem {
+  id          String  @id @default(uuid())
+  budgetId    String
+  toothCode   Int?
+  procedure   String
+  description String
+  unitPrice   Decimal
+  quantity    Int     @default(1)
+  total       Decimal
+
+  budget      Budget  @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@map("budget_items")
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  tenantId    String
+  patientId   String
+  budgetId    String?
+  amount      Decimal
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDIENTE)
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient     Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  budget      Budget?       @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("payments")
+}
+
+model Attachment {
+  id               String         @id @default(uuid())
+  entityType       FileEntityType
+  entityId         String
+  patientId        String?
+  treatmentPlanId  String?
+  clinicalRecordId String?
+  fileUrl          String
+  fileType         FileType
+  fileName         String
+  fileSize         Int
+  uploadedBy       String
+  createdAt        DateTime       @default(now())
+
+  patient          Patient?       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  treatmentPlan    TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  clinicalRecord   ClinicalRecord? @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+model Notification {
+  id           String             @id @default(uuid())
+  userId       String
+  type         String
+  channel      NotificationChannel
+  templateData Json
+  status       String             @default("pending")
+  sentAt       DateTime?
+  readAt       DateTime?
+  createdAt    DateTime           @default(now())
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  tenantId   String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Subscription {
+  id          String   @id @default(uuid())
+  tenantId    String   @unique
+  planType    PlanType
+  status      String   @default("active")
+  maxLocales  Int      @default(1)
+  maxDentists Int      @default(3)
+  maxPatients Int      @default(100)
+  features    Json     @default("[]")
+  startsAt    DateTime @default(now())
+  expiresAt   DateTime?
+  autoRenew   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model GlobalSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("global_settings")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String?
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("activity_logs")
+}
