@@ -7,11 +7,25 @@ import { Public } from "../../common/decorators/public.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 
+function getCookieDomain(): string | undefined {
+  const appUrl = process.env.APP_URL;
+  if (!appUrl || process.env.NODE_ENV !== "production") return undefined;
+  try {
+    const hostname = new URL(appUrl).hostname;
+    const parts = hostname.split(".");
+    if (parts.length >= 3) {
+      return "." + parts.slice(-2).join(".");
+    }
+  } catch {}
+  return undefined;
+}
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax" as const,
   path: "/",
+  domain: getCookieDomain(),
 };
 
 @Controller("auth")
