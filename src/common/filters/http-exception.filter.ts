@@ -22,9 +22,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = (res as any).message || message;
         errors = (res as any).errors;
       }
+      this.logger.error(`${request.method} ${request.url} ${status} - ${JSON.stringify(message)}`);
+    } else {
+      const error = exception instanceof Error ? exception : new Error(String(exception));
+      this.logger.error(
+        `${request.method} ${request.url} ${status} - Error no controlado: ${error.message}`,
+        error.stack,
+      );
     }
-
-    this.logger.error(`${request.method} ${request.url} ${status} - ${JSON.stringify(message)}`);
 
     response.status(status).json({
       success: false,
