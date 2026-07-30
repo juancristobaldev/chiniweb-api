@@ -88,7 +88,10 @@ export class PatientsService {
       },
     });
     if (!patient) throw new NotFoundException("Paciente no encontrado");
-    return patient;
+    return {
+      ...patient,
+      displayName: `${patient.firstName || patient.user?.firstName || ""} ${patient.lastName || patient.user?.lastName || ""}`.trim(),
+    };
   }
 
   async findById(id: string, tenantId: string) {
@@ -123,16 +126,17 @@ export class PatientsService {
       },
     });
     if (!patient) throw new NotFoundException("Paciente no encontrado");
-    return patient;
+    return {
+      ...patient,
+      displayName: `${patient.firstName || patient.user?.firstName || ""} ${patient.lastName || patient.user?.lastName || ""}`.trim(),
+    };
   }
 
   async create(tenantId: string, dto: CreatePatientDto, user?: any) {
-    if (dto.rut) {
-      const existing = await this.prisma.patient.findFirst({
-        where: { tenantId, rut: dto.rut },
-      });
-      if (existing) throw new ConflictException("Ya existe un paciente con ese RUT");
-    }
+    const existingRut = await this.prisma.patient.findFirst({
+      where: { tenantId, rut: dto.rut },
+    });
+    if (existingRut) throw new ConflictException("Ya existe un paciente con ese RUT");
 
     let dentistId = dto.dentistId;
 
@@ -147,75 +151,112 @@ export class PatientsService {
 
     await this.validateTenantReferences(tenantId, dentistId, dto.localeIds);
 
-    let userId: string | null = null;
+    const patient = await this.prisma.$transaction(async (tx) => {
+      let userId: string | null = null;
 
-    if (dto.email) {
-      const existingUser = await this.prisma.user.findUnique({
-        where: { email: dto.email },
+      if (dto.email) {
+        const existingUser = await tx.user.findUnique({
+          where: { email: dto.email, tenantId },
+        });
+        if (!existingUser) {
+          const tempPassword = await bcrypt.hash(`tmp-${crypto.randomUUID()}`, 12);
+          const user = await tx.user.create({
+            data: {
+              email: dto.email,
+              passwordHash: tempPassword,
+              firstName: dto.firstName,
+              lastName: dto.lastName,
+              phone: dto.phone,
+              role: "PATIENT",
+              tenantId,
+            },
+          });
+          userId = user.id;
+        } else {
+          userId = existingUser.id;
+        }
+      }
+
+      const patient = await tx.patient.create({
+        data: {
+          tenantId,
+          userId,
+          rut: dto.rut,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          dob: dto.dob ? new Date(dto.dob) : null,
+          sex: dto.sex,
+          address: dto.address,
+          emergencyContact: dto.emergencyContact,
+          emergencyPhone: dto.emergencyPhone,
+          bloodType: dto.bloodType,
+          occupation: dto.occupation,
+          referredBy: dto.referredBy,
+          dentistId,
+        },
       });
-      if (!existingUser) {
-        const tempPassword = await bcrypt.hash(`tmp-${crypto.randomUUID()}`, 12);
-        const user = await this.prisma.user.create({
-          data: {
-            email: dto.email,
-            passwordHash: tempPassword,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            phone: dto.phone,
-            role: "PATIENT",
-            tenantId,
-          },
-        });
-        userId = user.id;
-      } else {
-        userId = existingUser.id;
+
+      if (dto.localeIds?.length) {
+        for (const localeId of dto.localeIds) {
+          await tx.patientLocale.create({
+            data: { patientId: patient.id, localeId },
+          });
+        }
       }
-    }
 
-    const patient = await this.prisma.patient.create({
-      data: {
-        tenantId,
-        userId,
-        rut: dto.rut,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        dob: dto.dob ? new Date(dto.dob) : null,
-        sex: dto.sex,
-        address: dto.address,
-        emergencyContact: dto.emergencyContact,
-        emergencyPhone: dto.emergencyPhone,
-        bloodType: dto.bloodType,
-        occupation: dto.occupation,
-        referredBy: dto.referredBy,
-        dentistId,
-      },
-    });
+      await tx.medicalInfo.create({
+        data: { patientId: patient.id },
+      });
 
-    if (dto.localeIds?.length) {
-      for (const localeId of dto.localeIds) {
-        await this.prisma.patientLocale.create({
-          data: { patientId: patient.id, localeId },
-        });
-      }
-    }
-
-    await this.prisma.medicalInfo.create({
-      data: { patientId: patient.id },
+      return patient;
     });
 
     return this.findById(patient.id, tenantId);
   }
 
   async update(id: string, tenantId: string, dto: UpdatePatientDto) {
-    await this.findById(id, tenantId);
+    const existing = await this.findById(id, tenantId);
     await this.validateTenantReferences(tenantId, dto.dentistId, dto.localeIds);
+
+    if (dto.rut) {
+      const duplicate = await this.prisma.patient.findFirst({
+        where: { tenantId, rut: dto.rut, id: { not: id } },
+      });
+      if (duplicate) throw new ConflictException("Ya existe un paciente con ese RUT");
+    }
 
     const patientUpdate: any = {};
     if (dto.dob) patientUpdate.dob = new Date(dto.dob);
 
-    const patientFields = ["rut", "sex", "address", "emergencyContact", "emergencyPhone", "bloodType", "occupation", "referredBy", "isActive", "dentistId"];
+    const patientFields = ["rut", "sex", "address", "emergencyContact", "emergencyPhone", "bloodType", "occupation", "referredBy", "dentistId"];
     for (const field of patientFields) {
       if (dto[field] !== undefined) patientUpdate[field] = dto[field];
+    }
+
+    if (dto.isActive !== undefined) {
+      patientUpdate.isActive = dto.isActive;
+    }
+
+    const hasUserUpdate = dto.firstName !== undefined || dto.lastName !== undefined || dto.phone !== undefined || dto.password !== undefined;
+
+    if (hasUserUpdate) {
+      if (existing.userId) {
+        const userUpdate: any = {};
+        if (dto.firstName !== undefined) userUpdate.firstName = dto.firstName;
+        if (dto.lastName !== undefined) userUpdate.lastName = dto.lastName;
+        if (dto.phone !== undefined) userUpdate.phone = dto.phone;
+        if (dto.password) userUpdate.passwordHash = await bcrypt.hash(dto.password, 12);
+
+        if (Object.keys(userUpdate).length > 0) {
+          await this.prisma.user.update({
+            where: { id: existing.userId },
+            data: userUpdate,
+          });
+        }
+      }
+
+      if (dto.firstName !== undefined) patientUpdate.firstName = dto.firstName;
+      if (dto.lastName !== undefined) patientUpdate.lastName = dto.lastName;
     }
 
     const patient = await this.prisma.patient.update({
@@ -224,35 +265,12 @@ export class PatientsService {
     });
 
     if (dto.localeIds !== undefined) {
-      await this.prisma.patientLocale.deleteMany({ where: { patientId: id } });
-      for (const localeId of dto.localeIds) {
-        await this.prisma.patientLocale.create({
-          data: { patientId: id, localeId },
-        });
-      }
-    }
-
-    if (dto.firstName || dto.lastName || dto.phone || dto.password) {
-      const userUpdate: any = {};
-      if (dto.firstName) userUpdate.firstName = dto.firstName;
-      if (dto.lastName) userUpdate.lastName = dto.lastName;
-      if (dto.phone) userUpdate.phone = dto.phone;
-      if (dto.password) userUpdate.passwordHash = await bcrypt.hash(dto.password, 12);
-
-      if (patient.userId) {
-        await this.prisma.user.update({
-          where: { id: patient.userId },
-          data: userUpdate,
-        });
-      } else {
-        await this.prisma.patient.update({
-          where: { id },
-          data: {
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-          },
-        });
-      }
+      await this.prisma.$transaction(async (tx) => {
+        await tx.patientLocale.deleteMany({ where: { patientId: id } });
+        for (const localeId of dto.localeIds!) {
+          await tx.patientLocale.create({ data: { patientId: id, localeId } });
+        }
+      });
     }
 
     return this.findById(id, tenantId);
@@ -278,17 +296,27 @@ export class PatientsService {
 
   async updateMedicalInfo(id: string, tenantId: string, dto: MedicalInfoDto) {
     await this.findById(id, tenantId);
+
+    const data: any = {};
+
+    if (dto.diseases !== undefined) data.diseases = dto.diseases;
+    if (dto.allergies !== undefined) data.allergies = dto.allergies;
+    if (dto.medications !== undefined) data.medications = dto.medications;
+    if (dto.surgeries !== undefined) data.surgeries = dto.surgeries;
+    if (dto.clinicalRisks !== undefined) data.clinicalRisks = dto.clinicalRisks;
+    if (dto.familyHistory !== undefined) data.familyHistory = dto.familyHistory;
+    if (dto.habits !== undefined) data.habits = dto.habits;
+    if (dto.motivoConsulta !== undefined) data.motivoConsulta = dto.motivoConsulta;
+    if (dto.ultimaVisita !== undefined) {
+      data.ultimaVisita = dto.ultimaVisita ? new Date(dto.ultimaVisita) : null;
+    }
+    if (dto.sangradoEncias !== undefined) data.sangradoEncias = dto.sangradoEncias;
+    if (dto.dolorDental !== undefined) data.dolorDental = dto.dolorDental;
+    if (dto.tratamientosPrevios !== undefined) data.tratamientosPrevios = dto.tratamientosPrevios;
+
     return this.prisma.medicalInfo.update({
       where: { patientId: id },
-      data: {
-        diseases: dto.diseases || [],
-        allergies: dto.allergies || [],
-        medications: dto.medications || [],
-        surgeries: dto.surgeries || [],
-        clinicalRisks: dto.clinicalRisks || [],
-        familyHistory: dto.familyHistory || [],
-        habits: dto.habits || [],
-      },
+      data,
     });
   }
 

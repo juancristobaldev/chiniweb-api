@@ -24,6 +24,10 @@ export class CreateDentistDto {
   @IsString()
   specialty?: string;
 
+  @IsString()
+  @MinLength(7)
+  rut: string;
+
   @IsOptional()
   @IsString()
   licenseNumber?: string;
@@ -54,6 +58,11 @@ export class UpdateDentistDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(7)
+  rut?: string;
+
+  @IsOptional()
+  @IsString()
   licenseNumber?: string;
 
   @IsOptional()
@@ -64,6 +73,11 @@ export class UpdateDentistDto {
   @IsString()
   @MinLength(6)
   password?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  localeIds?: string[];
 }
 
 export class AssignLocalesDto {

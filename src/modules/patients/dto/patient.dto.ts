@@ -17,9 +17,9 @@ export class CreatePatientDto {
   @IsString()
   phone?: string;
 
-  @IsOptional()
   @IsString()
-  rut?: string;
+  @MinLength(7)
+  rut: string;
 
   @IsOptional()
   @IsDateString()
@@ -152,11 +152,59 @@ export class PatientQueryDto {
 }
 
 export class MedicalInfoDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   diseases?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   allergies?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   medications?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   surgeries?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   clinicalRisks?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   familyHistory?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   habits?: string[];
+
+  @IsOptional()
+  @IsString()
+  motivoConsulta?: string;
+
+  @IsOptional()
+  @IsString()
+  ultimaVisita?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  sangradoEncias?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  dolorDental?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tratamientosPrevios?: string[];
 }

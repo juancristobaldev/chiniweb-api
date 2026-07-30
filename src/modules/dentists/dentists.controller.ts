@@ -11,6 +11,18 @@ import { UserRole } from "../../common/enums/roles.enum";
 export class DentistsController {
   constructor(private readonly dentistsService: DentistsService) {}
 
+  @Get("me")
+  @Roles(UserRole.DENTIST)
+  async getMe(@Req() req: any) {
+    return this.dentistsService.getMyProfile(req.user.id, req.user.tenantId);
+  }
+
+  @Put("me")
+  @Roles(UserRole.DENTIST)
+  async updateMe(@Req() req: any, @Body() dto: UpdateDentistDto) {
+    return this.dentistsService.updateMyProfile(req.user.id, req.user.tenantId, dto);
+  }
+
   @Get()
   @Roles(UserRole.ADMIN, UserRole.OWNER)
   async findAll(@Req() req: any) {

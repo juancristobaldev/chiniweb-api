@@ -255,6 +255,7 @@ model Dentist {
   tenantId       String
   specialty      String?
   licenseNumber  String?
+  rut            String?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -315,19 +316,24 @@ model PatientLocale {
 }
 
 model MedicalInfo {
-  id            String   @id @default(uuid())
-  patientId     String   @unique
-  diseases      Json     @default("[]")
-  allergies     Json     @default("[]")
-  medications   Json     @default("[]")
-  surgeries     Json     @default("[]")
-  clinicalRisks Json     @default("[]")
-  familyHistory Json     @default("[]")
-  habits        Json     @default("[]")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                  String    @id @default(uuid())
+  patientId           String    @unique
+  diseases            Json      @default("[]")
+  allergies           Json      @default("[]")
+  medications         Json      @default("[]")
+  surgeries           Json      @default("[]")
+  clinicalRisks       Json      @default("[]")
+  familyHistory       Json      @default("[]")
+  habits              Json      @default("[]")
+  motivoConsulta      String?
+  ultimaVisita        DateTime?
+  sangradoEncias      Boolean?
+  dolorDental         Boolean?
+  tratamientosPrevios Json      @default("[]")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient             Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("medical_info")
 }

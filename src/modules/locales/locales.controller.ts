@@ -80,4 +80,16 @@ export class LocalesController {
   ) {
     return this.localesService.removeSpecialty(specialtyId, localeId, req.user.tenantId);
   }
+
+  @Get(":id/dentists")
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  async getDentists(@Param("id") id: string, @Req() req: any) {
+    return this.localesService.getDentistsByLocale(id, req.user.tenantId);
+  }
+
+  @Get(":id/patients")
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  async getPatients(@Param("id") id: string, @Req() req: any) {
+    return this.localesService.getPatientsByLocale(id, req.user.tenantId);
+  }
 }

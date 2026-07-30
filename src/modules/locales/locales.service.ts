@@ -96,4 +96,61 @@ export class LocalesService {
     await this.prisma.specialty.delete({ where: { id: specialtyId } });
     return { message: "Especialidad eliminada" };
   }
+
+  async getDentistsByLocale(localeId: string, tenantId: string) {
+    await this.findById(localeId, tenantId);
+
+    return this.prisma.dentistLocale.findMany({
+      where: { localeId, dentist: { tenantId } },
+      include: {
+        dentist: {
+          include: {
+            user: {
+              select: {
+                id: true, email: true, firstName: true, lastName: true,
+                phone: true, avatarUrl: true, isActive: true,
+              },
+            },
+            locales: {
+              include: {
+                locale: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { dentist: { createdAt: "desc" } },
+    });
+  }
+
+  async getPatientsByLocale(localeId: string, tenantId: string) {
+    await this.findById(localeId, tenantId);
+
+    return this.prisma.patientLocale.findMany({
+      where: { localeId, patient: { tenantId } },
+      include: {
+        patient: {
+          include: {
+            user: {
+              select: {
+                id: true, email: true, firstName: true, lastName: true,
+                phone: true, avatarUrl: true, isActive: true,
+              },
+            },
+            dentist: {
+              include: {
+                user: { select: { id: true, firstName: true, lastName: true } },
+              },
+            },
+            locales: {
+              include: {
+                locale: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { patient: { createdAt: "desc" } },
+    });
+  }
 }
