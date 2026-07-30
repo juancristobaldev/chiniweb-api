@@ -32,6 +32,7 @@ export class PaymentsService {
         budget: { select: { id: true, total: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
   }
 

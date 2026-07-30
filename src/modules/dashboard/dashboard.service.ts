@@ -234,9 +234,9 @@ export class DashboardService {
 
   async getAdminSettings() {
     const settings = await this.prisma.globalSetting.findMany();
-    const map: Record<string, string> = {};
+    const map: Record<string, any> = {};
     for (const s of settings) {
-      map[s.key] = JSON.stringify(s.value);
+      map[s.key] = s.value;
     }
     return map;
   }

@@ -17,6 +17,7 @@ export class BudgetsService {
         payments: { select: { id: true, amount: true, method: true, status: true, paidAt: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
   }
 
@@ -55,34 +56,36 @@ export class BudgetsService {
     const discount = dto.discount || 0;
     const total = subtotal - discount;
 
-    const budget = await this.prisma.budget.create({
-      data: {
-        tenantId,
-        patientId: dto.patientId,
-        dentistId,
-        localeId: dto.localeId,
-        subtotal,
-        discount,
-        total,
-        validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
-        notes: dto.notes,
-        status: "BORRADOR",
-      },
-    });
-
-    for (const item of dto.items) {
-      await this.prisma.budgetItem.create({
+    const budget = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.budget.create({
         data: {
-          budgetId: budget.id,
+          tenantId,
+          patientId: dto.patientId,
+          dentistId,
+          localeId: dto.localeId,
+          subtotal,
+          discount,
+          total,
+          validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
+          notes: dto.notes,
+          status: "BORRADOR",
+        },
+      });
+
+      await tx.budgetItem.createMany({
+        data: dto.items.map((item) => ({
+          budgetId: created.id,
           toothCode: item.toothCode,
           procedure: item.procedure,
           description: item.description,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
           total: item.unitPrice * item.quantity,
-        },
+        })),
       });
-    }
+
+      return created;
+    });
 
     return this.findById(budget.id, tenantId);
   }

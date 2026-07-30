@@ -32,7 +32,23 @@ export class AttachmentsController {
 
   @Post("upload")
   @Roles(UserRole.OWNER, UserRole.DENTIST)
-  @UseInterceptors(FileInterceptor("file", { dest: "uploads" }))
+  @UseInterceptors(FileInterceptor("file", {
+    dest: "uploads",
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req: any, file: any, cb: any) => {
+      const allowed = [
+        "image/jpeg", "image/png", "image/gif", "image/webp",
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Tipo de archivo no permitido: ${file.mimetype}`), false);
+      }
+    },
+  }))
   async upload(@Req() req: any, @UploadedFile() file: any, @Body() body: any) {
     return this.service.createFromUpload(req.user.tenantId, req.user.id, file, body);
   }

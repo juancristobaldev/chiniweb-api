@@ -1,6 +1,7 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable, UnauthorizedException, ConflictException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
+import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { v4 as uuid } from "uuid";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -71,6 +72,20 @@ export class AuthService {
     return this.sanitizeUser(user);
   }
 
+  async registerOwnerTx(tx: any, dto: { email: string; password: string; firstName: string; lastName: string }, tenantId: string) {
+    const existing = await tx.user.findUnique({ where: { email: dto.email } });
+    if (existing) throw new ConflictException("El email ya está registrado");
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    return tx.user.create({
+      data: {
+        email: dto.email, passwordHash,
+        firstName: dto.firstName, lastName: dto.lastName,
+        role: UserRole.OWNER, tenantId,
+      },
+    });
+  }
+
   async registerDentist(dto: RegisterDto, tenantId: string) {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
@@ -99,14 +114,13 @@ export class AuthService {
   }
 
   async refreshAccessToken(refreshToken: string) {
+    const tokenHash = this.hashToken(refreshToken);
+
     const stored = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
     });
 
     if (!stored || stored.revoked || stored.expiresAt < new Date()) {
-      throw new UnauthorizedException("Refresh token inválido o expirado");
-    }
-    if (stored.token.startsWith("reset:")) {
       throw new UnauthorizedException("Refresh token inválido o expirado");
     }
 
@@ -244,11 +258,12 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload);
     const refreshToken = uuid();
+    const tokenHash = this.hashToken(refreshToken);
 
     await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
-        token: refreshToken,
+        token: tokenHash,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -262,22 +277,27 @@ export class AuthService {
     return safe;
   }
 
+  private hashToken(token: string): string {
+    return crypto.createHash("sha256").update(token).digest("hex");
+  }
+
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       return { message: "Si el email está registrado, recibirás un enlace de recuperación." };
     }
 
-    const resetToken = `reset:${uuid()}`;
+    const rawToken = `reset:${uuid()}`;
+    const tokenHash = this.hashToken(rawToken);
     await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
-        token: resetToken,
+        token: tokenHash,
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
 
-    const resetUrl = `${process.env.APP_URL || "http://localhost:3000"}/auth/reset-password?token=${encodeURIComponent(resetToken)}`;
+    const resetUrl = `${process.env.APP_URL || "http://localhost:3000"}/auth/reset-password?token=${encodeURIComponent(rawToken)}`;
     await this.sendPasswordResetEmail(user.email, resetUrl);
 
     if (process.env.NODE_ENV !== "production" && !process.env.SMTP_HOST) {
@@ -288,8 +308,9 @@ export class AuthService {
   }
 
   async resetPassword(token: string, newPassword: string) {
-    const entry = await this.prisma.refreshToken.findUnique({ where: { token } });
-    if (!entry || entry.revoked || !entry.token.startsWith("reset:") || entry.expiresAt < new Date()) {
+    const tokenHash = this.hashToken(token);
+    const entry = await this.prisma.refreshToken.findUnique({ where: { token: tokenHash } });
+    if (!entry || entry.revoked || entry.expiresAt < new Date()) {
       if (entry) await this.prisma.refreshToken.update({ where: { id: entry.id }, data: { revoked: true } });
       throw new UnauthorizedException("Token inválido o expirado");
     }

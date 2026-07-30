@@ -28,6 +28,7 @@ export class DentistsService {
         _count: { select: { locales: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
   }
 

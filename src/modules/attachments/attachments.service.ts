@@ -59,6 +59,7 @@ export class AttachmentsService {
       data: {
         entityType: dto.entityType || FileEntityType.PATIENT,
         entityId: dto.entityId || dto.patientId,
+        tenantId,
         patientId: dto.patientId,
         treatmentPlanId: dto.treatmentPlanId,
         clinicalRecordId: dto.clinicalRecordId,

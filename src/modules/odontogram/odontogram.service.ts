@@ -28,7 +28,7 @@ export class OdontogramService {
 
     if (!odontogram && user?.role !== UserRole.PATIENT) {
       odontogram = await this.prisma.odontogram.create({
-        data: { patientId, lastUpdatedBy: dentistId },
+        data: { patientId, tenantId, lastUpdatedBy: dentistId },
         include: {
           items: true,
           records: true,
@@ -50,21 +50,29 @@ export class OdontogramService {
     const odontogram = await this.getOrCreate(patientId, tenantId, dentistId, { id: dentistId, role: UserRole.DENTIST });
     if (!odontogram.id) throw new NotFoundException("Odontograma no encontrado");
 
-    const existing = await this.prisma.odontogramItem.findFirst({
-      where: { odontogramId: odontogram.id, toothCode: dto.toothCode, surface: dto.surface },
-    });
-
-    if (existing) {
-      return this.prisma.odontogramItem.update({
-        where: { id: existing.id },
-        data: { procedure: dto.procedure, status: dto.status || "PENDIENTE", color: dto.color, notes: dto.notes },
-      });
-    }
-
-    return this.prisma.odontogramItem.create({
-      data: {
-        odontogramId: odontogram.id, toothCode: dto.toothCode, surface: dto.surface,
-        procedure: dto.procedure, status: dto.status || "PENDIENTE", color: dto.color, notes: dto.notes,
+    return this.prisma.odontogramItem.upsert({
+      where: {
+        odontogramId_toothCode_surface: {
+          odontogramId: odontogram.id,
+          toothCode: dto.toothCode,
+          surface: dto.surface,
+        },
+      },
+      update: {
+        procedure: dto.procedure,
+        status: dto.status || "PENDIENTE",
+        color: dto.color,
+        notes: dto.notes,
+      },
+      create: {
+        odontogramId: odontogram.id,
+        tenantId,
+        toothCode: dto.toothCode,
+        surface: dto.surface,
+        procedure: dto.procedure,
+        status: dto.status || "PENDIENTE",
+        color: dto.color,
+        notes: dto.notes,
       },
     });
   }
@@ -82,11 +90,52 @@ export class OdontogramService {
   }
 
   async addItems(patientId: string, tenantId: string, dentistId: string, dto: BatchCreateOdontogramItemDto) {
-    const results: any[] = [];
-    for (const item of dto.items) {
-      results.push(await this.addItem(patientId, tenantId, dentistId, item));
+    return this.prisma.$transaction(async (tx) => {
+      const results: any[] = [];
+      for (const item of dto.items) {
+        results.push(await this.addItemTx(tx, patientId, tenantId, dentistId, item));
+      }
+      return results;
+    });
+  }
+
+  private async addItemTx(tx: any, patientId: string, tenantId: string, dentistId: string, dto: CreateOdontogramItemDto) {
+    const odontogram = await this.getOrCreateTx(tx, patientId, tenantId, dentistId);
+    if (!odontogram.id) throw new NotFoundException("Odontograma no encontrado");
+
+    const existing = await tx.odontogramItem.findFirst({
+      where: { odontogramId: odontogram.id, toothCode: dto.toothCode, surface: dto.surface },
+    });
+
+    if (existing) {
+      return tx.odontogramItem.update({
+        where: { id: existing.id },
+        data: { procedure: dto.procedure, status: dto.status || "PENDIENTE", color: dto.color, notes: dto.notes },
+      });
     }
-    return results;
+
+    return tx.odontogramItem.create({
+      data: {
+        odontogramId: odontogram.id, tenantId, toothCode: dto.toothCode, surface: dto.surface,
+        procedure: dto.procedure, status: dto.status || "PENDIENTE", color: dto.color, notes: dto.notes,
+      },
+    });
+  }
+
+  private async getOrCreateTx(tx: any, patientId: string, tenantId: string, dentistId: string) {
+    let odontogram = await tx.odontogram.findUnique({
+      where: { patientId },
+      include: { items: true, records: true },
+    });
+
+    if (!odontogram) {
+      odontogram = await tx.odontogram.create({
+        data: { patientId, tenantId, lastUpdatedBy: dentistId },
+        include: { items: true, records: true },
+      });
+    }
+
+    return odontogram;
   }
 
   async removeItem(id: string, tenantId: string) {
@@ -124,6 +173,7 @@ export class OdontogramService {
     const record = await this.prisma.odontogramRecord.create({
       data: {
         odontogramId: odontogram.id,
+        tenantId,
         creatorId: user.id,
         creatorName: `${user.firstName} ${user.lastName}`,
         toothNumber: dto.toothNumber,

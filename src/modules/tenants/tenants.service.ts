@@ -33,6 +33,7 @@ export class TenantsService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
   }
 
@@ -77,59 +78,60 @@ export class TenantsService {
     });
     if (existing) throw new ConflictException("Ya existe una clínica con ese RUT");
 
-    const tenant = await this.prisma.tenant.create({
-      data: {
-        name: dto.name,
-        rut: dto.rut,
-        businessName: dto.businessName,
-        email: dto.email,
-        phone: dto.phone,
-        address: dto.address,
-        themeColor: dto.themeColor || "blue",
-        planType: dto.planType || "TRIAL",
-      },
-    });
+    const result = await this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: {
+          name: dto.name,
+          rut: dto.rut,
+          businessName: dto.businessName,
+          email: dto.email,
+          phone: dto.phone,
+          address: dto.address,
+          themeColor: dto.themeColor || "blue",
+          planType: dto.planType || "TRIAL",
+        },
+      });
 
-    await this.prisma.subscription.create({
-      data: {
-        tenantId: tenant.id,
-        planType: dto.planType || "TRIAL",
-        maxLocales: 1,
-        maxDentists: 3,
-        maxPatients: 100,
-        features: ["basic_agenda", "basic_clinical_records", "basic_finances"],
-        expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      },
-    });
+      await tx.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          planType: dto.planType || "TRIAL",
+          maxLocales: 1,
+          maxDentists: 3,
+          maxPatients: 100,
+          features: ["basic_agenda", "basic_clinical_records", "basic_finances"],
+          expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        },
+      });
 
-    const ownerUser = await this.authService.registerOwner(
-      {
-        email: dto.email,
-        password: dto.ownerPassword,
-        firstName: dto.ownerFirstName,
-        lastName: dto.ownerLastName,
-      },
-      tenant.id
-    );
+      const ownerUser = await this.authService.registerOwnerTx(
+        tx,
+        {
+          email: dto.email,
+          password: dto.ownerPassword,
+          firstName: dto.ownerFirstName,
+          lastName: dto.ownerLastName,
+        },
+        tenant.id
+      );
 
-    await this.prisma.tenant.update({
-      where: { id: tenant.id },
-      data: { ownerId: ownerUser.id },
-    });
-
-    const updatedTenant = await this.prisma.tenant.findUnique({
-      where: { id: tenant.id },
-      include: {
-        owner: {
-          select: {
-            id: true, email: true, firstName: true, lastName: true,
-            phone: true, isActive: true, lastLogin: true,
+      const updatedTenant = await tx.tenant.update({
+        where: { id: tenant.id },
+        data: { ownerId: ownerUser.id },
+        include: {
+          owner: {
+            select: {
+              id: true, email: true, firstName: true, lastName: true,
+              phone: true, isActive: true, lastLogin: true,
+            },
           },
         },
-      },
+      });
+
+      return { tenant: updatedTenant, owner: ownerUser };
     });
 
-    return { tenant: updatedTenant, owner: ownerUser };
+    return result;
   }
 
   async update(id: string, dto: UpdateTenantDto) {

@@ -20,8 +20,10 @@ export class ClinicalRecordsService {
         attachments: true,
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
   }
+
 
   async findByType(patientId: string, type: string, tenantId: string) {
     const patient = await this.prisma.patient.findFirst({
@@ -37,6 +39,7 @@ export class ClinicalRecordsService {
       },
       orderBy: { createdAt: "desc" },
     });
+    
   }
 
   async findById(id: string, tenantId: string) {
@@ -75,6 +78,7 @@ export class ClinicalRecordsService {
       data: {
         patientId: dto.patientId,
         dentistId,
+        tenantId,
         appointmentId: dto.appointmentId,
         type: dto.type,
         content: dto.content,

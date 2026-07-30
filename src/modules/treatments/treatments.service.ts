@@ -54,6 +54,7 @@ export class TreatmentsService {
       data: {
         patientId: dto.patientId,
         dentistId,
+        tenantId,
         name: dto.name,
         description: dto.description,
         startDate: dto.startDate ? new Date(dto.startDate) : null,
@@ -78,21 +79,24 @@ export class TreatmentsService {
 
   async addStage(planId: string, tenantId: string, dto: CreateStageDto) {
     await this.findById(planId, tenantId);
-    const lastStage = await this.prisma.treatmentStage.findFirst({
-      where: { planId },
-      orderBy: { step: "desc" },
-    });
-    const step = (lastStage?.step || 0) + 1;
+    return this.prisma.$transaction(async (tx) => {
+      const lastStage = await tx.treatmentStage.findFirst({
+        where: { planId },
+        orderBy: { step: "desc" },
+      });
+      const step = (lastStage?.step || 0) + 1;
 
-    return this.prisma.treatmentStage.create({
-      data: {
-        planId,
-        step,
-        name: dto.name,
-        description: dto.description,
-        toothCode: dto.toothCode,
-        status: "PLANIFICADO",
-      },
+      return tx.treatmentStage.create({
+        data: {
+          planId,
+          tenantId,
+          step,
+          name: dto.name,
+          description: dto.description,
+          toothCode: dto.toothCode,
+          status: "PLANIFICADO",
+        },
+      });
     });
   }
 
@@ -121,13 +125,15 @@ export class TreatmentsService {
 
   async completePlan(id: string, tenantId: string) {
     await this.findById(id, tenantId);
-    await this.prisma.treatmentStage.updateMany({
-      where: { planId: id, status: { not: "COMPLETADO" } },
-      data: { status: "COMPLETADO", completedAt: new Date() },
-    });
-    return this.prisma.treatmentPlan.update({
-      where: { id },
-      data: { status: "COMPLETADO", endDate: new Date() },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.treatmentStage.updateMany({
+        where: { planId: id, status: { not: "COMPLETADO" } },
+        data: { status: "COMPLETADO", completedAt: new Date() },
+      });
+      return tx.treatmentPlan.update({
+        where: { id },
+        data: { status: "COMPLETADO", endDate: new Date() },
+      });
     });
   }
 

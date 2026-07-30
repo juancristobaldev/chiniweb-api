@@ -4,6 +4,7 @@ import { ValidationPipe } from "@nestjs/common";
 import * as cookieParser from "cookie-parser";
 import * as express from "express";
 import * as fs from "fs";
+import * as jwt from "jsonwebtoken";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 
@@ -15,6 +16,21 @@ async function bootstrap() {
   app.use(cookieParser());
 
   fs.mkdirSync("uploads", { recursive: true });
+
+  app.use("/uploads", (req: any, res: any, next: any) => {
+    const token = req.cookies?.access_token;
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Acceso no autorizado" });
+    }
+    try {
+      const secret = process.env.JWT_ACCESS_SECRET || "dev-access-secret";
+      jwt.verify(token, secret);
+      next();
+    } catch {
+      return res.status(401).json({ success: false, message: "Token inválido o expirado" });
+    }
+  });
+
   app.use("/uploads", express.static("uploads"));
 
   app.enableCors({

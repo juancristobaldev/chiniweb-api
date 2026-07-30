@@ -13,6 +13,7 @@ export class LocalesService {
         _count: { select: { boxes: true, specialties: true, appointments: true } },
       },
       orderBy: { createdAt: "desc" },
+      take: 50,
     });
   }
 
@@ -120,6 +121,7 @@ export class LocalesService {
         },
       },
       orderBy: { dentist: { createdAt: "desc" } },
+      take: 50,
     });
   }
 
@@ -151,6 +153,7 @@ export class LocalesService {
         },
       },
       orderBy: { patient: { createdAt: "desc" } },
+      take: 50,
     });
   }
 }

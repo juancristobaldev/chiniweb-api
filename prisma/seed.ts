@@ -34,25 +34,25 @@ async function main() {
     data: [
       {
         key: "app.name",
-        value: JSON.stringify("ChiniDent"),
+        value: "ChiniDent",
         description: "Application name",
         updatedBy: admin.id,
       },
       {
         key: "app.default_theme",
-        value: JSON.stringify("blue"),
+        value: "blue",
         description: "Default CTA color theme",
         updatedBy: admin.id,
       },
       {
         key: "app.max_login_attempts",
-        value: JSON.stringify(5),
+        value: 5,
         description: "Max failed login attempts before lockout",
         updatedBy: admin.id,
       },
       {
         key: "app.session_timeout",
-        value: JSON.stringify(15),
+        value: 15,
         description: "Session timeout in minutes",
         updatedBy: admin.id,
       },

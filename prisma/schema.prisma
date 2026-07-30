@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
@@ -372,6 +371,7 @@ model ClinicalRecord {
   id             String            @id @default(uuid())
   patientId      String
   dentistId      String
+  tenantId       String
   appointmentId  String?
   type           ClinicalRecordType
   content        Json
@@ -386,12 +386,14 @@ model ClinicalRecord {
 
   @@index([patientId])
   @@index([dentistId])
+  @@index([tenantId])
   @@map("clinical_records")
 }
 
 model Odontogram {
   id             String   @id @default(uuid())
   patientId      String   @unique
+  tenantId       String
   lastUpdatedBy  String
   dentition      String   @default("permanent")
   createdAt      DateTime @default(now())
@@ -402,12 +404,14 @@ model Odontogram {
   items          OdontogramItem[]
   records        OdontogramRecord[]
 
+  @@index([tenantId])
   @@map("odontograms")
 }
 
 model OdontogramRecord {
   id            String   @id @default(uuid())
   odontogramId  String
+  tenantId      String
   creatorId     String
   creatorName   String
   toothNumber   Int
@@ -421,12 +425,14 @@ model OdontogramRecord {
   creator       User       @relation(fields: [creatorId], references: [id])
 
   @@index([odontogramId, toothNumber])
+  @@index([tenantId])
   @@map("odontogram_records")
 }
 
 model OdontogramItem {
   id            String          @id @default(uuid())
   odontogramId  String
+  tenantId      String
   toothCode     Int
   surface       ToothSurface
   procedure     DentalProcedure
@@ -438,7 +444,9 @@ model OdontogramItem {
 
   odontogram    Odontogram      @relation(fields: [odontogramId], references: [id], onDelete: Cascade)
 
+  @@unique([odontogramId, toothCode, surface])
   @@index([odontogramId, toothCode])
+  @@index([tenantId])
   @@map("odontogram_items")
 }
 
@@ -446,6 +454,7 @@ model TreatmentPlan {
   id          String          @id @default(uuid())
   patientId   String
   dentistId   String
+  tenantId    String
   name        String
   description String?
   status      TreatmentStatus @default(PLANIFICADO)
@@ -462,12 +471,14 @@ model TreatmentPlan {
   attachments Attachment[]
 
   @@index([patientId])
+  @@index([tenantId])
   @@map("treatment_plans")
 }
 
 model TreatmentStage {
   id          String          @id @default(uuid())
   planId      String
+  tenantId    String
   step        Int
   name        String
   description String?
@@ -479,6 +490,8 @@ model TreatmentStage {
 
   plan        TreatmentPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
 
+  @@index([planId])
+  @@index([tenantId])
   @@map("treatment_stages")
 }
 
@@ -551,6 +564,7 @@ model Attachment {
   id               String         @id @default(uuid())
   entityType       FileEntityType
   entityId         String
+  tenantId         String
   patientId        String?
   treatmentPlanId  String?
   clinicalRecordId String?
@@ -565,6 +579,7 @@ model Attachment {
   treatmentPlan    TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
   clinicalRecord   ClinicalRecord? @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@map("attachments")
 }
 

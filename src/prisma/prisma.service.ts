@@ -18,6 +18,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     const tenantModels = [
       "Locale", "Dentist", "Patient",
       "Appointment", "Budget", "Payment",
+      "ClinicalRecord", "Odontogram", "OdontogramItem", "OdontogramRecord",
+      "TreatmentPlan", "TreatmentStage", "Attachment",
     ];
 
     this.$use(async (params, next) => {

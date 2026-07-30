@@ -57,6 +57,7 @@ export class PatientsService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 100,
     });
 
     return patients.map((p) => ({

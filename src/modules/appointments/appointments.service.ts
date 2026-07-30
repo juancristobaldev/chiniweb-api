@@ -76,6 +76,7 @@ export class AppointmentsService {
         },
       },
       orderBy: { startTime: "asc" },
+      take: 200,
     });
   }
 
@@ -135,27 +136,41 @@ export class AppointmentsService {
     const dentistId = role === "DENTIST" ? actorId : dto.dentistId;
     if (!dentistId) throw new NotFoundException("Dentista no encontrado");
     await this.validateAppointmentReferences(tenantId, dentistId, dto);
-    await this.ensureNoConflict(tenantId, dentistId, new Date(dto.startTime), new Date(dto.endTime));
 
-    return this.prisma.appointment.create({
-      data: {
-        tenantId,
-        patientId: dto.patientId,
-        dentistId,
-        localeId: dto.localeId,
-        boxId: dto.boxId,
-        treatmentPlanId: dto.treatmentPlanId,
-        startTime: new Date(dto.startTime),
-        endTime: new Date(dto.endTime),
-        type: dto.type,
-        notes: dto.notes,
-        status: "RESERVADA",
-      },
-      include: {
-        patient: { select: { id: true, firstName: true, lastName: true } },
-        dentist: { select: { id: true, firstName: true, lastName: true } },
-        locale: { select: { id: true, name: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const conflict = await tx.appointment.findFirst({
+        where: {
+          dentistId,
+          tenantId,
+          status: { notIn: ["CANCELADA", "NO_ASISTIO"] },
+          OR: [
+            { startTime: { lt: new Date(dto.endTime), gte: new Date(dto.startTime) } },
+            { endTime: { gt: new Date(dto.startTime), lte: new Date(dto.endTime) } },
+          ],
+        },
+      });
+      if (conflict) throw new ConflictException("El dentista ya tiene una cita en ese horario");
+
+      return tx.appointment.create({
+        data: {
+          tenantId,
+          patientId: dto.patientId,
+          dentistId,
+          localeId: dto.localeId,
+          boxId: dto.boxId,
+          treatmentPlanId: dto.treatmentPlanId,
+          startTime: new Date(dto.startTime),
+          endTime: new Date(dto.endTime),
+          type: dto.type,
+          notes: dto.notes,
+          status: "RESERVADA",
+        },
+        include: {
+          patient: { select: { id: true, firstName: true, lastName: true } },
+          dentist: { select: { id: true, firstName: true, lastName: true } },
+          locale: { select: { id: true, name: true } },
+        },
+      });
     });
   }
 
